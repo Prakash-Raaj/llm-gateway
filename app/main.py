@@ -4,9 +4,11 @@ from contextlib import asynccontextmanager
 import asyncpg
 import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException
-
+from fastapi.responses import StreamingResponse
+from app.streaming import openai_sse
 from app.providers.base import (
     BadRequestError, ChatRequest, Message, ProviderUnavailableError, RateLimitError,
+    ProviderError
 )
 from app.schemas.openai import (
     ChatCompletionRequest, ChatCompletionResponse, ChatMessage, Choice, CompletionUsage,
@@ -54,9 +56,6 @@ async def chat_completions(body: ChatCompletionRequest):
         raise HTTPException(404, f"Unknown model '{body.model}'")
     provider = app.state.providers[route.provider]
 
-    if body.stream:
-        raise HTTPException(400, "Streaming not supported yet")
-
     req = ChatRequest(
         model=route.model,   # provider's real model ID, not the client's name
         messages= [Message(**m.model_dump()) for m in body.messages],
@@ -64,14 +63,23 @@ async def chat_completions(body: ChatCompletionRequest):
         max_tokens=body.max_tokens
     )
 
+    if body.stream:
+        chunks = provider.stream(req)
+        try:
+            first = await anext(chunks)   # wait for the first chunk so early errors get a real status code
+        except ProviderError as e:
+            raise to_http_error(e) from e
+
+        include_usage = bool(body.stream_options and body.stream_options.include_usage)
+        return StreamingResponse(
+            openai_sse(first, chunks, route.model, include_usage),
+            media_type="text/event-stream",
+        )
+
     try:
         res = await provider.chat(req)
-    except RateLimitError as e:
-        raise HTTPException(429, str(e))
-    except ProviderUnavailableError as e:
-        raise HTTPException(503, str(e))
-    except BadRequestError as e:
-        raise HTTPException(400, str(e))
+    except ProviderError as e:
+        raise to_http_error(e) from e
 
     return ChatCompletionResponse(
         model=res.model,
@@ -82,3 +90,12 @@ async def chat_completions(body: ChatCompletionRequest):
             total_tokens=res.usage.input_tokens + res.usage.output_tokens,
         )
     )
+
+
+# Map our provider errors to HTTP errors
+def to_http_error(e: ProviderError) -> HTTPException:
+    if isinstance(e, RateLimitError):
+        return HTTPException(429, str(e))
+    if isinstance(e, ProviderUnavailableError):
+        return HTTPException(503, str(e))
+    return HTTPException(400, str(e))
