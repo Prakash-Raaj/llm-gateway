@@ -13,6 +13,7 @@ services:
 
     volumes:
       - ./app:/code/app      # live code reload
+      - ./config:/code/config
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # Postgres with pgvector

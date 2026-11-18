@@ -1,5 +1,5 @@
 """Common interface that every LLM provider (Ollama, Groq, Gemini, ...) must follow."""
-
+import httpx
 from abc import ABC, abstractmethod
 from typing import AsyncIterator, Literal
 
@@ -86,3 +86,17 @@ class Provider(ABC):
     # Turn texts into embedding vectors (optional; override if supported)
     async def embed(self, texts: list[str], model: str) -> EmbedResponse:
         raise NotImplementedError(f"{self.name} does not support embeddings")
+
+    # Close network clients on shutdown (override if needed)
+    async def aclose(self) -> None:
+        pass
+
+    # Turn an HTTP error status into our error types (shared by all adapters)
+def raise_for_status(r: httpx.Response) -> None:
+    if r.status_code == 429:
+        raise RateLimitError(r.text)
+    if r.status_code in (401, 403) or r.status_code >= 500:
+        raise ProviderUnavailableError(f"{r.status_code}: {r.text}")
+    if r.status_code >= 400:
+        raise BadRequestError(r.text)
+

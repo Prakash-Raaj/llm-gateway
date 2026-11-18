@@ -2,7 +2,7 @@ import httpx
 
 from app.providers.base import (
     BadRequestError, ChatRequest, ChatResponse, Provider,
-    ProviderUnavailableError, RateLimitError, Usage,
+    ProviderUnavailableError, RateLimitError, Usage, raise_for_status 
 )
 
 
@@ -31,13 +31,7 @@ class OllamaProvider(Provider):
         except httpx.RequestError as e:
             raise ProviderUnavailableError(f"Ollama unreachable: {e}") from e
 
-        # Map HTTP status codes to our error types
-        if r.status_code == 429:
-            raise RateLimitError(r.text)
-        if r.status_code >= 500:
-            raise ProviderUnavailableError(r.text)
-        if r.status_code >= 400:
-            raise BadRequestError(r.text)  # e.g. model not found
+        raise_for_status(r)
 
         data = r.json()
         return ChatResponse(
