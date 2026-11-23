@@ -1,6 +1,7 @@
+import os
 from openai import OpenAI
 
-client = OpenAI(base_url="http://localhost:8000/v1", api_key="not-needed-yet")
+client = OpenAI(base_url="http://localhost:8000/v1", api_key=os.environ["GATEWAY_API_KEY"])
 
 for model in ["llama3.2", "groq-gpt-oss", "gemini-flash"]:
     print(f"\n[{model}] ", end="", flush=True)
