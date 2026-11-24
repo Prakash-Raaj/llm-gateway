@@ -3,9 +3,9 @@
 import json
 import time
 import uuid
-from typing import AsyncIterator
+from typing import AsyncIterator, Callable
 
-from app.providers.base import ProviderError, StreamChunk
+from app.providers.base import ProviderError, StreamChunk, Usage
 from app.schemas.openai import ChatCompletionChunk, ChoiceDelta, ChunkChoice, CompletionUsage
 
 
@@ -21,7 +21,8 @@ async def openai_sse(
         first: StreamChunk,
         rest: AsyncIterator[StreamChunk],
         model: str,
-        include_usage: bool
+        include_usage: bool,
+        on_finish: Callable[[Usage | None, ProviderError | None], None],
 )-> AsyncIterator[str]:
 
     chunk_id = f"chatcmpl-{uuid.uuid4().hex}" #same id + created for every chunk
@@ -44,6 +45,8 @@ async def openai_sse(
             yield c
 
     usage = None  # token counts, usually only on the provider's last chunk
+    error = None # set if the provider fails mid stream
+
     try:
         async for c in all_chunks():
             if c.delta:            # new text -> send it
@@ -61,8 +64,12 @@ async def openai_sse(
                 total_tokens=usage.input_tokens + usage.output_tokens,
             ))
     except ProviderError as e:
+        error = e
         # Headers (200 OK) were already sent, so report the error inside the stream
         yield _sse(json.dumps({"error": {"message": str(e)}}))
+    finally:
+        # Runs however the stream ends: success, provider error, or client disconnect
+        on_finish(usage, error)
 
     # Tells the client the stream is finished
     yield _sse("[DONE]")

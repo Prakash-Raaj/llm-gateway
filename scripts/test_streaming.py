@@ -1,5 +1,8 @@
 import os
+from dotenv import load_dotenv
 from openai import OpenAI
+
+load_dotenv()
 
 client = OpenAI(base_url="http://localhost:8000/v1", api_key=os.environ["GATEWAY_API_KEY"])
 

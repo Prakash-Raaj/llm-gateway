@@ -13,6 +13,11 @@ class ProviderConfig(BaseModel):
 class ModelRoute(BaseModel):
     provider: str   # key in `providers`
     model: str      # provider's real model ID
+    input_price: float = 0.0
+    output_price: float = 0.0
+
+    def cost(self, input_tokens: int, output_tokens: int)-> float:
+        return (input_tokens * self.input_price + output_tokens * self.output_price) / 1_000_000
 
 class GatewayConfig(BaseModel):
     providers: dict[str, ProviderConfig]

@@ -1,4 +1,5 @@
 import os
+import time
 from contextlib import asynccontextmanager
 
 import asyncpg
@@ -8,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from app.streaming import openai_sse
 from app.providers.base import (
     BadRequestError, ChatRequest, Message, ProviderUnavailableError, RateLimitError,
-    ProviderError
+    ProviderError, Usage
 )
 from app.schemas.openai import (
     ChatCompletionRequest, ChatCompletionResponse, ChatMessage, Choice, CompletionUsage,
@@ -16,7 +17,7 @@ from app.schemas.openai import (
 from app.admin import router as admin_router
 from app.auth import ApiKey, require_api_key
 from app.db import init_db
-
+from app.usage import UsageLogger, UsageRecord
 from app.config import load_config
 from app.providers.registry import build_providers
 
@@ -27,11 +28,14 @@ async def lifespan(app:FastAPI):
     # Open a reusable pool of Postgres connections and a Redis client
     app.state.db = await asyncpg.create_pool(os.environ["DATABASE_URL"])
     await init_db(app.state.db)
+    app.state.usage = UsageLogger(app.state.db)
+    app.state.usage.start()
     app.state.redis = redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
     app.state.config = load_config()
     app.state.providers = build_providers(app.state.config)
     yield
     # Close connections on shutdown
+    await app.state.usage.stop()
     await app.state.db.close()
     await app.state.redis.aclose()
     for p in app.state.providers.values():
@@ -54,9 +58,29 @@ async def health():
 @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 
 async def chat_completions(body: ChatCompletionRequest, api_key : ApiKey = Depends(require_api_key)):
+    start = time.perf_counter()
     # Find which provider handles this model name
     route = app.state.config.models.get(body.model)
+
+    # Queue one usage row (instant; written to postgres in the background)
+    def record(status: int, usage: Usage|None = None, error: str | None = None)-> None:
+        usage = usage or Usage()
+        app.state.usage.log(UsageRecord(
+            api_key_id= api_key.id,
+            model= body.model, 
+            provider= route.provider if route else None,
+            provider_model=route.model if route else None,
+            stream = body.stream,
+            status_code=status,
+            prompt_tokens=usage.input_tokens,
+            completion_tokens=usage.output_tokens,
+            latency_ms=int((time.perf_counter()-start) * 1000),
+            cost_usd=route.cost(usage.input_tokens, usage.output_tokens) if route else 0.0,
+            error=error
+        ))
+
     if route is None:
+        record(404, error="unknown model")
         raise HTTPException(404, f"Unknown model '{body.model}'")
     provider = app.state.providers[route.provider]
 
@@ -72,19 +96,30 @@ async def chat_completions(body: ChatCompletionRequest, api_key : ApiKey = Depen
         try:
             first = await anext(chunks)   # wait for the first chunk so early errors get a real status code
         except ProviderError as e:
+            http_error = to_http_error(e)
+            record(http_error.status_code, error=str(e))
             raise to_http_error(e) from e
+
+        def on_finish(usage:Usage|None, error:ProviderError|None)-> None:
+            if error is None:
+                record(200, usage)
+            else:
+                record(to_http_error(error).status_code, usage, str(error))
 
         include_usage = bool(body.stream_options and body.stream_options.include_usage)
         return StreamingResponse(
-            openai_sse(first, chunks, route.model, include_usage),
+            openai_sse(first, chunks, route.model, include_usage, on_finish),
             media_type="text/event-stream",
         )
 
     try:
         res = await provider.chat(req)
     except ProviderError as e:
-        raise to_http_error(e) from e
+        http_error = to_http_error(e)
+        record(http_error.status_code, error=str(e))
+        raise http_error from e
 
+    record(200, res.usage)
     return ChatCompletionResponse(
         model=res.model,
         choices=[Choice(message=ChatMessage(role="assistant", content=res.content))],
