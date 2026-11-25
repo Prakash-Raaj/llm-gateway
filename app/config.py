@@ -5,10 +5,15 @@ import yaml
 from pydantic import BaseModel, model_validator
 
 class ProviderConfig(BaseModel):
-    type: Literal["ollama", "openai_compatible"]
+    type: Literal["ollama", "openai_compatible", "mock"]
     base_url: str | None = None
     base_url_env: str | None = None   # read base URL from this env var instead
     api_key_env: str | None = None    # name of env var holding the API key
+     # Mock-only settings (ignored by real providers)
+    latency_ms: int = 0
+    error_rate: float = 0.0
+    error: str = "rate_limit"
+    reply: str = "Hello from the mock provider."
 
 class ModelRoute(BaseModel):
     provider: str   # key in `providers`
