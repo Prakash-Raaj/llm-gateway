@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest
+pytest-asyncio
+testcontainers[postgres]
+ruff==0.17.6

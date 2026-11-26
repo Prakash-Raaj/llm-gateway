@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 from app.auth import generate_key, hash_key, require_admin
 
-
 # Every route in this router requires the admin key
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])

@@ -1,9 +1,15 @@
-import httpx
 import json
 
+import httpx
+
 from app.providers.base import (
-    BadRequestError, ChatRequest, ChatResponse, Provider,
-    ProviderUnavailableError, RateLimitError, Usage, raise_for_status, StreamChunk
+    ChatRequest,
+    ChatResponse,
+    Provider,
+    ProviderUnavailableError,
+    StreamChunk,
+    Usage,
+    raise_for_status,
 )
 
 

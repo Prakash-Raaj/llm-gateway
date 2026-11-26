@@ -1,0 +1,12 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"                         # run async def tests automatically
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]                            # so `from app...` imports work
+testpaths = ["tests"]                         # only look for tests in tests/
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]   # errors, pyflakes, import order, bugbear, pyupgrade
+ignore = ["B008"]                     # FastAPI's Depends(...) in defaults is intended

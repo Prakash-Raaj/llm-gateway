@@ -2,10 +2,9 @@ import os
 
 from app.config import GatewayConfig, ProviderConfig
 from app.providers.base import Provider
+from app.providers.mock import MockProvider
 from app.providers.ollama import OllamaProvider
 from app.providers.openai_compat import OpenAICompatibleProvider
-from app.providers.mock import MockProvider
-
 
 
 def _base_url(cfg: ProviderConfig) -> str:

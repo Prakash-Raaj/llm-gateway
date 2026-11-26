@@ -1,10 +1,17 @@
-import httpx
 import json
 
+import httpx
+
 from app.providers.base import (
-    raise_for_status, ChatRequest, ChatResponse, Provider, ProviderUnavailableError, 
-    Usage, StreamChunk
+    ChatRequest,
+    ChatResponse,
+    Provider,
+    ProviderUnavailableError,
+    StreamChunk,
+    Usage,
+    raise_for_status,
 )
+
 
 # Works for any provider with an OpenAI-style API (Groq, Gemini, OpenRouter, ...)
 class OpenAICompatibleProvider(Provider):

@@ -3,7 +3,7 @@
 import json
 import time
 import uuid
-from typing import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable
 
 from app.providers.base import ProviderError, StreamChunk, Usage
 from app.schemas.openai import ChatCompletionChunk, ChoiceDelta, ChunkChoice, CompletionUsage

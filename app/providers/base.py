@@ -1,10 +1,10 @@
 """Common interface that every LLM provider (Ollama, Groq, Gemini, ...) must follow."""
-import httpx
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Literal
+from collections.abc import AsyncIterator
+from typing import Literal
 
+import httpx
 from pydantic import BaseModel
-
 
 # --- Shared request/response types (same shape for every provider) ---
 
@@ -88,7 +88,7 @@ class Provider(ABC):
         raise NotImplementedError(f"{self.name} does not support embeddings")
 
     # Close network clients on shutdown (override if needed)
-    async def aclose(self) -> None:
+    async def aclose(self) -> None:  # noqa: B027  (optional hook, not abstract)
         pass
 
     # Turn an HTTP error status into our error types (shared by all adapters)

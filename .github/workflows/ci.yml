@@ -1,0 +1,26 @@
+name: CI
+
+# When to run: every push to any branch, and every pull request
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest          # a fresh Linux machine from GitHub
+    steps:
+      - uses: actions/checkout@v4   # download your repo onto it
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip                # reuse downloaded packages between runs
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -v

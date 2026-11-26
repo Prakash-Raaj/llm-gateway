@@ -1,0 +1,19 @@
+# Test-only config: mock providers only, so no API keys or Ollama needed
+providers:
+  mock:
+    type: mock
+    reply: hello from mock
+  mock-fail:
+    type: mock
+    error_rate: 1.0
+    error: rate_limit
+
+models:
+  mock:
+    provider: mock
+    model: mock-model
+    input_price: 1.0
+    output_price: 2.0
+  mock-fail:
+    provider: mock-fail
+    model: mock-model

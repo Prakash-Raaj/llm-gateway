@@ -4,6 +4,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, model_validator
 
+
 class ProviderConfig(BaseModel):
     type: Literal["ollama", "openai_compatible", "mock"]
     base_url: str | None = None

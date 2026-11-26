@@ -2,13 +2,19 @@
 
 import asyncio
 import random
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from app.providers.base import (
-    BadRequestError, ChatRequest, ChatResponse, Provider, ProviderError,
-    ProviderUnavailableError, RateLimitError, StreamChunk, Usage,
+    BadRequestError,
+    ChatRequest,
+    ChatResponse,
+    Provider,
+    ProviderError,
+    ProviderUnavailableError,
+    RateLimitError,
+    StreamChunk,
+    Usage,
 )
-
 
 # Map the `error` setting to the real error class
 ERRORS: dict[str, type[ProviderError]] = {
