@@ -8,11 +8,12 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.admin import router as admin_router
-from app.auth import ApiKey, require_api_key
+from app.auth import ApiKey
 from app.config import load_config
 from app.db import init_db
 from app.providers.base import ChatRequest, Message, ProviderError, ProviderUnavailableError, RateLimitError, Usage
 from app.providers.registry import build_providers
+from app.ratelimit import RateLimiter, rate_limit
 from app.schemas.openai import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -33,6 +34,7 @@ async def lifespan(app:FastAPI):
     app.state.usage = UsageLogger(app.state.db)
     app.state.usage.start()
     app.state.redis = redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
+    app.state.limiter = RateLimiter(app.state.redis)
     app.state.config = load_config(os.environ.get("CONFIG_PATH", "config/models.yaml"))
     app.state.providers = build_providers(app.state.config)
     yield
@@ -59,7 +61,7 @@ async def health():
 
 @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 
-async def chat_completions(body: ChatCompletionRequest, api_key : ApiKey = Depends(require_api_key)):
+async def chat_completions(body: ChatCompletionRequest, api_key : ApiKey = Depends(rate_limit)):
     start = time.perf_counter()
     # Find which provider handles this model name
     route = app.state.config.models.get(body.model)

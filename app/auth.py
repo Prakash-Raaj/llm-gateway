@@ -14,6 +14,7 @@ bearer = HTTPBearer(auto_error=False)
 class ApiKey(BaseModel):
     id: int
     name: str
+    rpm_limit: int
 
 
 # New random key: "gw_" + 32 random bytes as URL-safe text
@@ -38,7 +39,7 @@ async def require_api_key(
         raise _unauthorized("Missing API Key")
 
     row = await request.app.state.db.fetchrow(
-        "SELECT id, name FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL",
+        "SELECT id, name, rpm_limit FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL",
         hash_key(creds.credentials)
     )
     if row is None:

@@ -1,5 +1,5 @@
 -r requirements.txt
 pytest
 pytest-asyncio
-testcontainers[postgres]
+testcontainers[postgres, redis]
 ruff==0.17.6

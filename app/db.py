@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS api_keys (
     revoked_at  TIMESTAMPTZ                  -- NULL = active; set = revoked
 );
 
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS rpm_limit INT NOT NULL DEFAULT 60;
+
 CREATE TABLE IF NOT EXISTS usage_logs (
     id                BIGSERIAL PRIMARY KEY,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),

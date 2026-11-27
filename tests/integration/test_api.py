@@ -102,3 +102,19 @@ async def test_unknown_model_returns_404_and_logs_it(client, api_key):
     [row] = await wait_for_usage()
     assert row["status_code"] == 404
     assert row["provider"] is None
+
+
+# --- Rate limit ---
+
+async def test_requests_over_the_limit_get_429(client, admin_headers):
+    res = await client.post("/admin/keys", json={"name": "slow", "rpm_limit": 3}, headers=admin_headers)
+    key = res.json()["key"]
+
+    for _ in range(3):
+        res = await client.post(URL, json=BODY, headers=auth(key))
+        assert res.status_code == 200
+
+    res = await client.post(URL, json=BODY, headers=auth(key))
+    assert res.status_code == 429
+    assert int(res.headers["Retry-After"]) >= 1
+    assert res.headers["X-RateLimit-Limit"] == "3"
