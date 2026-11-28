@@ -117,4 +117,24 @@ async def test_requests_over_the_limit_get_429(client, admin_headers):
     res = await client.post(URL, json=BODY, headers=auth(key))
     assert res.status_code == 429
     assert int(res.headers["Retry-After"]) >= 1
-    assert res.headers["X-RateLimit-Limit"] == "3"
+    assert res.headers["X-RateLimit-Limit-Requests"] == "3"
+    assert res.headers["X-RateLimit-Remaining-Requests"] == "0"
+
+async def test_successful_response_has_rate_limit_headers(client, api_key):
+    res = await client.post(URL, json=BODY, headers=auth(api_key["key"]))
+
+    assert res.status_code == 200
+    assert res.headers["X-RateLimit-Limit-Requests"] == "60"
+    assert res.headers["X-RateLimit-Remaining-Requests"] == "59"
+    assert int(res.headers["X-RateLimit-Reset-Requests"]) >= 1
+    assert "Retry-After" not in res.headers
+
+async def test_streaming_response_has_rate_limit_headers(client, api_key):
+    res = await client.post(URL, json={**BODY, "stream": True}, headers=auth(api_key["key"]))
+
+    assert res.status_code == 200
+    assert res.headers["X-RateLimit-Remaining-Requests"] == "59"
+
+async def test_admin_routes_have_no_rate_limit_headers(client, admin_headers):
+    res = await client.get("/admin/keys", headers=admin_headers)
+    assert "X-RateLimit-Limit-Requests" not in res.headers

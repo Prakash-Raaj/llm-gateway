@@ -43,3 +43,13 @@ async def test_concurrent_burst_never_exceeds_limit(limiter):
     # 50 requests at the same moment against a limit of 10
     results = await asyncio.gather(*[limiter.hit(key_id=1, rpm=10) for _ in range(50)])
     assert sum(r.allowed for r in results) == 10
+
+
+async def test_reset_time_grows_as_bucket_empties(limiter):
+    # 60 rpm = 1 token per second, so each used token adds ~1 s until full
+    first = await limiter.hit(key_id=1, rpm=60)
+    for _ in range(9):
+        last = await limiter.hit(key_id=1, rpm=60)
+
+    assert 900 <= first.reset_ms <= 1000
+    assert 9_000 <= last.reset_ms <= 10_000

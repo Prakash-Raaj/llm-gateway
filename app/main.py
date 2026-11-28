@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 import asyncpg
 import redis.asyncio as redis
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.admin import router as admin_router
@@ -47,6 +47,13 @@ async def lifespan(app:FastAPI):
 
 app = FastAPI(title="LLM Gateway", lifespan=lifespan)
 app.include_router(admin_router)
+
+# Runs around every request: adds the rate-limit headers set by the rate_limit dependency
+@app.middleware("http")
+async def add_rate_limit_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.update(getattr(request.state, "rate_limit_headers", {}))
+    return response
 
 # GET /health: checks that Postgres (with pgvector) and Redis are reachable.
 @app.get('/health')

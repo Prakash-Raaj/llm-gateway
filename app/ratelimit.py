@@ -41,8 +41,10 @@ end
 -- Save the bucket; delete it once it would be full again anyway
 redis.call("HSET", KEYS[1], "tokens", tokens, "ts", now)
 redis.call("PEXPIRE", KEYS[1], math.ceil(capacity / rate))
+-- How long until the bucket is full again
+local reset_ms = math.ceil((capacity - tokens) / rate)
 
-return {allowed, math.floor(tokens), retry_ms}
+return {allowed, math.floor(tokens), retry_ms, reset_ms}
 """
 
 
@@ -50,6 +52,7 @@ class RateLimitResult(BaseModel):
     allowed: bool
     remaining: int       # whole tokens left after this request
     retry_after_ms: int  # 0 if allowed
+    reset_ms: int        # time until the bucket is full again
 
 
 class RateLimiter:
@@ -60,11 +63,11 @@ class RateLimiter:
 
      # Try to take one token from this key's bucket
     async def hit(self, key_id: int, rpm: int)-> RateLimitResult:
-        allowed, remaining, retry_ms = await self.script(
+        allowed, remaining, retry_ms, reset_ms = await self.script(
             keys = [f"ratelimit:{key_id}"],
             args = [rpm, rpm/60_000] # refill tokens every 60,000 ms
         )
-        return RateLimitResult(allowed=bool(allowed), remaining=remaining, retry_after_ms=retry_ms)
+        return RateLimitResult(allowed=bool(allowed), remaining=remaining, retry_after_ms=retry_ms, reset_ms=reset_ms)
 
 
 # Dependency for limited routes: a valid key (checked first) plus a token from its bucket
@@ -77,14 +80,16 @@ async def rate_limit(request: Request, api_key: ApiKey = Depends(require_api_key
         log.exception("Rate limiter unavailable; allowing request")
         return api_key
 
+    request.state.rate_limit_headers = {
+        "X-RateLimit-Limit-Requests": str(api_key.rpm_limit),
+        "X-RateLimit-Remaining-Requests": str(result.remaining),
+        "X-RateLimit-Reset-Requests": str(math.ceil(result.reset_ms / 1000)),  # seconds
+    }
+
     if not result.allowed:
         raise HTTPException(
             429,
             f"Rate limit exceeded: {api_key.rpm_limit} requests per minute",
-            headers={
-                "Retry-After": str(math.ceil(result.retry_after_ms / 1000)),  # seconds
-                "X-RateLimit-Limit": str(api_key.rpm_limit),
-                "X-RateLimit-Remaining": "0",
-            }
+            headers={"Retry-After": str(math.ceil(result.retry_after_ms / 1000))},  # seconds
         )
     return api_key
